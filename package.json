@@ -17,6 +17,7 @@
     "electron-is-dev": "^3.0.1",
     "electron-log": "^5.4.3",
     "express": "^5.2.1",
+    "opencc-js": "^1.4.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "react-router-dom": "^7.13.0",
