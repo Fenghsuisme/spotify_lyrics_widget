@@ -6,11 +6,14 @@ export default function LyricsView() {
   const [parsedLyrics, setParsedLyrics] = useState([]);
   const [rawLyrics, setRawLyrics] = useState("");
   const [currentTime, setCurrentTime] = useState(0);
+  // 記錄「收到進度的時刻」，之後用系統時鐘推算目前進度，避免計時器漂移
+  const [playback, setPlayback] = useState({ progressMs: 0, receivedAt: Date.now(), isPlaying: false });
   const [isHovered, setIsHovered] = useState(false);
-  
+
   const [translateY, setTranslateY] = useState(0);
-  const lineRefs = useRef([]); 
-  const containerRef = useRef(null); 
+  const [lineScales, setLineScales] = useState([]);
+  const lineRefs = useRef([]);
+  const containerRef = useRef(null);
 
   const [settings, setSettings] = useState({
     fontSize: 24,
@@ -26,8 +29,9 @@ export default function LyricsView() {
       if (match) {
         const minutes = parseInt(match[1]);
         const seconds = parseInt(match[2]);
-        const milliseconds = match[3] ? parseInt(match[3]) : 0;
-        return { time: minutes * 60 + seconds + milliseconds / 1000, text: match[4].trim() };
+        // [mm:ss.xx] 的 xx 是百分之一秒，[mm:ss.xxx] 才是毫秒
+        const fraction = match[3] ? parseInt(match[3]) / (match[3].length === 2 ? 100 : 1000) : 0;
+        return { time: minutes * 60 + seconds + fraction, text: match[4].trim() };
       }
       return null;
     }).filter(item => item !== null);
@@ -37,8 +41,7 @@ export default function LyricsView() {
     ipcRenderer.on('update-song', (event, songData) => {
       setCurrentSong(songData);
       if (songData.progressMs !== undefined) {
-        const serverTime = songData.progressMs / 1000;
-        setCurrentTime(prevTime => Math.abs(serverTime - prevTime) > 1.5 ? serverTime : prevTime);
+        setPlayback({ progressMs: songData.progressMs, receivedAt: Date.now(), isPlaying: songData.isPlaying });
       }
     });
 
@@ -59,7 +62,10 @@ export default function LyricsView() {
     
     ipcRenderer.on('mouse-ignore-reply', () => {}); 
 
-    return () => ipcRenderer.removeAllListeners('update-song');
+    return () => {
+      ['update-song', 'update-lyrics', 'apply-style', 'mouse-ignore-reply']
+        .forEach(channel => ipcRenderer.removeAllListeners(channel));
+    };
   }, []);
 
   useEffect(() => {
@@ -71,15 +77,38 @@ export default function LyricsView() {
   }, [settings.isLocked]);
 
   useEffect(() => {
-    let interval;
-    if (currentSong.isPlaying) {
-      interval = setInterval(() => setCurrentTime(prev => prev + 0.1), 100);
-    }
+    const compute = () => {
+      const elapsed = playback.isPlaying ? (Date.now() - playback.receivedAt) : 0;
+      setCurrentTime((playback.progressMs + elapsed) / 1000);
+    };
+    compute();
+    if (!playback.isPlaying) return;
+    const interval = setInterval(compute, 100);
     return () => clearInterval(interval);
-  }, [currentSong.isPlaying]);
+  }, [playback]);
 
-  const activeIndex = parsedLyrics.findIndex(line => line.time > currentTime) - 1;
+  let activeIndex = parsedLyrics.findIndex(line => line.time > currentTime) - 1;
+  // findIndex 回傳 -1 代表已經唱過最後一句，停在最後一行而不是跳回第一句
+  if (activeIndex === -2) activeIndex = parsedLyrics.length - 1;
   const safeIndex = activeIndex < 0 ? 0 : activeIndex;
+
+  // 量測每一行在目前字級下的寬度，太長的行算出縮小比例讓它剛好塞進視窗
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || parsedLyrics.length === 0) {
+      setLineScales([]);
+      return;
+    }
+    const style = window.getComputedStyle(container);
+    const ctx = document.createElement('canvas').getContext('2d');
+    ctx.font = `bold ${settings.fontSize}px ${style.fontFamily}`;
+    const available = container.clientWidth * 0.95;
+    setLineScales(parsedLyrics.map(line => {
+      // 當前行還會再被 scale(1.05) 放大，量測時要算進去
+      const width = ctx.measureText(line.text).width * 1.05;
+      return width > available ? available / width : 1;
+    }));
+  }, [parsedLyrics, settings.fontSize, settings.windowWidth]);
 
   useEffect(() => {
     const activeLine = lineRefs.current[safeIndex];
@@ -100,7 +129,7 @@ export default function LyricsView() {
 
       setTranslateY(targetTranslateY);
     }
-  }, [safeIndex, parsedLyrics, settings.fontSize]);
+  }, [safeIndex, parsedLyrics, settings.fontSize, lineScales]);
   if (!settings.isVisible) return null;
 
   const currentOpacity = (isHovered || !settings.isLocked) ? 1 : settings.idleOpacity;
@@ -158,13 +187,15 @@ export default function LyricsView() {
               parsedLyrics.map((line, index) => {
                 const isActive = index === safeIndex;
                 const isNext = index === safeIndex + 1;
-                
+                const fitScale = lineScales[index] !== undefined ? lineScales[index] : 1;
+
                 return (
-                  <div 
+                  <div
                     key={index}
                     ref={el => lineRefs.current[index] = el}
                     style={{
-                      fontSize: isActive ? '1em' : '0.6em', 
+                      fontSize: isActive ? `${fitScale}em` : `${Math.min(0.6, fitScale)}em`,
+                      whiteSpace: 'nowrap',
                       lineHeight: '1.5',
                       padding: '0.2em 0',
                       

@@ -22,21 +22,61 @@ let tray = null;
 let currentTrackId = null;
 
 // --- 歌詞獲取邏輯 ---
+function pickBestSearchResult(results, durationSec) {
+  if (!Array.isArray(results) || results.length === 0) return null;
+  const synced = results.filter(r => r.syncedLyrics);
+  const pool = synced.length > 0 ? synced : results.filter(r => r.plainLyrics);
+  if (pool.length === 0) return null;
+  pool.sort((a, b) => Math.abs((a.duration || 0) - durationSec) - Math.abs((b.duration || 0) - durationSec));
+  const best = pool[0];
+  // 時長差超過 10 秒很可能是同名的另一首歌（或不同版本），同步歌詞會整個對不上
+  if (Math.abs((best.duration || 0) - durationSec) > 10) return null;
+  return best.syncedLyrics || best.plainLyrics;
+}
+
 async function fetchLyrics(trackName, artistName, durationMs) {
-    try {
-      const cleanArtist = artistName.split(',')[0].trim();
-      const cleanTrack = trackName.replace(/\(.*\)|-.*|feat\..*/i, '').trim();
-      log.info(`正在搜尋歌詞: ${cleanTrack} - ${cleanArtist}`);
-      
-      const url = `https://lrclib.net/api/get`;
-      const response = await axios.get(url, {
-        params: { artist_name: cleanArtist, track_name: cleanTrack, duration: durationMs / 1000 }
-      });
-      return response.data.syncedLyrics || response.data.plainLyrics || "找不到歌詞";
-    } catch (error) { 
-      log.error('歌詞搜尋失敗:', error.message);
-      return "歌詞搜尋失敗"; 
+    const durationSec = Math.round(durationMs / 1000);
+    const primaryArtist = artistName.split(',')[0].trim();
+    const cleanTrack = (trackName
+      .replace(/\s*[\(\[（【].*?[\)\]）】]/g, '')
+      .replace(/\s+-\s+.*$/, '')
+      .replace(/\s*feat\..*$/i, '')
+      .trim()) || trackName;
+
+    const attempts = [
+      { type: 'get', track: trackName, artist: primaryArtist, duration: durationSec },
+      { type: 'get', track: cleanTrack, artist: primaryArtist, duration: durationSec },
+      { type: 'get', track: cleanTrack, artist: primaryArtist },
+      { type: 'search', params: { track_name: trackName, artist_name: primaryArtist } },
+      { type: 'search', params: { track_name: cleanTrack, artist_name: primaryArtist } },
+      { type: 'search', params: { q: `${cleanTrack} ${primaryArtist}` } },
+    ];
+
+    for (const attempt of attempts) {
+      try {
+        if (attempt.type === 'get') {
+          const params = { track_name: attempt.track, artist_name: attempt.artist };
+          if (attempt.duration) params.duration = attempt.duration;
+          const { data } = await axios.get('https://lrclib.net/api/get', { params });
+          const lyrics = data.syncedLyrics || data.plainLyrics;
+          if (lyrics) {
+            log.info(`歌詞命中 (get): ${attempt.track} - ${attempt.artist}`);
+            return lyrics;
+          }
+        } else {
+          const { data } = await axios.get('https://lrclib.net/api/search', { params: attempt.params });
+          const lyrics = pickBestSearchResult(data, durationSec);
+          if (lyrics) {
+            log.info(`歌詞命中 (search): ${JSON.stringify(attempt.params)}`);
+            return lyrics;
+          }
+        }
+      } catch (error) {
+        // 404 或網路錯誤都直接換下一招
+      }
     }
+    log.info(`所有搜尋方式都找不到歌詞: ${trackName} - ${primaryArtist}`);
+    return "找不到歌詞";
 }
 
 // --- Spotify 授權伺服器 ---
@@ -67,14 +107,17 @@ function refreshAccessToken() {
 
 function checkCurrentSong() {
   if (!lyricsWindow) return;
+  const requestStart = Date.now();
   spotifyApi.getMyCurrentPlayingTrack().then(async (data) => {
     if (data.body && data.body.item) {
       const item = data.body.item;
+      // progress_ms 是伺服器產生回應當下的進度，等我們收到時已經過了約半個往返延遲
+      const latencyComp = data.body.is_playing ? (Date.now() - requestStart) / 2 : 0;
       const songInfo = {
         title: item.name,
         artist: item.artists.map(a => a.name).join(', '),
         isPlaying: data.body.is_playing,
-        progressMs: data.body.progress_ms,
+        progressMs: data.body.progress_ms + latencyComp,
       };
       lyricsWindow.webContents.send('update-song', songInfo);
       if (item.id !== currentTrackId) {

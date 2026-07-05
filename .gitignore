@@ -3,7 +3,7 @@ node_modules/
 /.pnp
 .pnp.js
 
-# 編譯產物 (這是你剛才噴錯的主因)
+# 編譯產物
 /dist/
 /build/
 /out/
