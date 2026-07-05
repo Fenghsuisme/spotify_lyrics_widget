@@ -1,70 +1,73 @@
-# Getting Started with Create React App
+# LyricsWidget
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+一個桌面歌詞小工具，即時顯示 Spotify 正在播放歌曲的同步歌詞，以透明浮窗置頂於桌面上。
 
-## Available Scripts
+使用 Electron + React 開發，支援 macOS 與 Windows。
 
-In the project directory, you can run:
+## 功能特色
 
-### `npm start`
+- 🎵 **即時同步歌詞** — 自動偵測 Spotify 播放中的歌曲，歌詞逐句滾動、與播放進度同步
+- 🔍 **多來源歌詞搜尋** — 以 [lrclib.net](https://lrclib.net) 為主要來源，找不到時自動改查網易雲音樂（中文歌覆蓋率高），並依歌手與歌曲時長挑選最符合的結果
+- 🈶 **簡轉繁** — 網易雲的簡體歌詞會透過 OpenCC 自動轉換為台灣正體用字
+- 📐 **字體自動縮放** — 歌詞過長時自動縮小字體，維持單行置中顯示不換行
+- 🖱️ **穿透浮窗** — 鎖定時滑鼠可直接點擊穿透歌詞視窗，不干擾其他操作
+- ⚙️ **系統列設定面板** — 可調整字體大小、視窗寬度、閒置透明度，並可解鎖拖曳調整位置
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+## 系統需求
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+- [Node.js](https://nodejs.org/)（含 npm）
+- Spotify 帳號（需為播放中裝置，免費或 Premium 皆可）
 
-### `npm test`
+## 安裝與執行
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+```bash
+# 安裝相依套件
+npm install
 
-### `npm run build`
+# 開發模式（同時啟動 React dev server 與 Electron）
+npm run electron
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+# 打包成安裝檔（輸出至 dist/）
+npm run dist
+```
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+首次啟動時會自動開啟瀏覽器要求 Spotify 授權，登入並同意後即可開始使用。
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+## Spotify API 設定
 
-### `npm run eject`
+本專案透過 [Spotify Web API](https://developer.spotify.com/documentation/web-api) 取得播放狀態。若要使用自己的 API 憑證：
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+1. 到 [Spotify Developer Dashboard](https://developer.spotify.com/dashboard) 建立應用程式
+2. 在應用程式設定中將 Redirect URI 設為 `http://127.0.0.1:8888/callback`
+3. 將 `main.js` 中的 `clientId` 與 `clientSecret` 換成你自己的憑證
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+## 使用方式
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+| 操作 | 說明 |
+| --- | --- |
+| 點擊系統列圖示 | 開啟／關閉設定面板 |
+| 右鍵系統列圖示 | 完全結束程式 |
+| 關閉「Position Lock」 | 解鎖歌詞視窗，可拖曳調整位置，完成後再鎖回 |
+| 滑鼠移到歌詞上 | 暫時提高不透明度並顯示歌名 |
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+## 專案結構
 
-## Learn More
+```
+├── main.js              # Electron 主程序：視窗、系統列、Spotify 輪詢、歌詞搜尋
+├── src/
+│   ├── index.js         # hash 路由：#lyrics 歌詞浮窗 / #settings 設定面板
+│   ├── LyricsView.js    # 歌詞顯示：LRC 解析、進度推算、滾動與字體縮放
+│   └── SettingsView.js  # 設定面板
+└── public/              # 靜態資源與圖示
+```
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+## 歌詞來源
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+- [lrclib.net](https://lrclib.net) — 開放的同步歌詞資料庫（主要來源）
+- 網易雲音樂 — 中文歌曲備援來源
 
-### Code Splitting
+歌詞版權皆屬原作者與各平台所有，本工具僅作個人使用之顯示用途。
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+## License
 
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+本專案採用 [MIT License](LICENSE) 授權。

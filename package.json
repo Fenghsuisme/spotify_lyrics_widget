@@ -3,6 +3,7 @@
   "productName": "LyricsWidget",
   "description": "A desktop widget for Spotify lyrics",
   "author": "Feng",
+  "license": "MIT",
   "homepage": "./",
   "version": "0.1.0",
   "private": true,
