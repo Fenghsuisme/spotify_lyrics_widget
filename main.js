@@ -5,6 +5,7 @@ const axios = require('axios');
 const path = require('path');
 const log = require('electron-log');
 const OpenCC = require('opencc-js');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 app.commandLine.appendSwitch('remote-debugging-port', '9222');
 
 // 網易雲的歌詞是簡體，轉成台灣正體用字
@@ -14,9 +15,9 @@ const LYRICS_TIMEOUT = 8000;
 const isPackaged = app.isPackaged;
 
 const spotifyApi = new SpotifyWebApi({
-  clientId: 'f0ada2f6a44e476892571219416c1e50',
-  clientSecret: '5b12477b77424122abeec8cabdf08a50',
-  redirectUri: 'http://127.0.0.1:8888/callback'
+  clientId: process.env.SPOTIFY_CLIENT_ID,
+  clientSecret: process.env.SPOTIFY_CLIENT_SECRET,
+  redirectUri: process.env.SPOTIFY_REDIRECT_URI || 'http://127.0.0.1:8888/callback'
 });  
 
 log.info('App starting... Packaged:', isPackaged);
