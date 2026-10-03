@@ -8,7 +8,6 @@ const OpenCC = require('opencc-js');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 app.commandLine.appendSwitch('remote-debugging-port', '9222');
 
-// 網易雲的歌詞是簡體，轉成台灣正體用字
 const toTraditional = OpenCC.Converter({ from: 'cn', to: 'tw' });
 const LYRICS_TIMEOUT = 8000;
 
